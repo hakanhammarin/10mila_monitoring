@@ -1,0 +1,48 @@
+[
+    {
+        "index": "d15e68fe-7622-49b7-af2a-b4becbcf9a63",
+        "type": "icmp",
+        "ip": "10.0.0.1",
+        "name": "1 - Firewall",
+        "status": "10",
+        "time": "",
+        "rtt": 0,
+        "count": 0,
+        "downtime": ""
+    },
+    {
+        "index": "9cb06a2a-0a9b-43a9-9fd1-da9d982cc8a8",
+        "type": "icmp",
+        "ip": "1.1.1.1",
+        "name": "2 - one.one.one.one",
+        "status": "PORTABLE",
+        "time": "",
+        "rtt": 0,
+        "count": 0,
+        "downtime": ""
+    },
+    {
+        "index": "2d8c60b7-0af2-4dbc-870d-12040b28ba6b",
+        "type": "icmp",
+        "ip": "9.9.9.9",
+        "name": "5 - Quad 9",
+        "status": "PORTABLE",
+        "time": "",
+        "rtt": 0,
+        "count": 0,
+        "downtime": ""
+    },
+    {
+        "index": "cebd9fec-7b4e-4bd8-8c63-7b8d68a5d922",
+        "type": "icmp",
+        "ip": "10.0.0.19",
+        "name": "1 - Xerox 6510",
+        "status": "0",
+        "time": "",
+        "rtt": 0,
+        "count": 0,
+        "downtime": ""
+    }
+    
+    
+]

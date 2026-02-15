@@ -1,0 +1,43 @@
+{
+    "timers": {
+        "pollInterval": 10,
+        "webRefreshInterval": 5000,
+        "pingTimeout": 600,
+        "logRetentionDays": 30,
+        "discoveryInterval": 300
+    },
+    "thresholds": {
+        "downThreshold": 4,
+        "highRttThreshold": 500,
+        "fuelWarningLevel": 50,
+        "fuelCriticalLevel": 10
+    },
+    "paths": {
+        "cisConfig": "./cis.json",
+        "cisDiscovery": "./cis_discovery.json",
+        "cisBaseline": "./cis_baseline.json",
+        "resultJson": "./result/result.json",
+        "logsDir": "./monitor-logs/",
+        "wwwroot": "./wwwroot/"
+    },
+    "baseline": {
+        "enabled": true,
+        "createdAt": "2026-02-15T21:06:16.156Z"
+    },
+    "server": {
+        "port": 8080,
+        "host": "localhost"
+    },
+    "fuel": {
+        "apiUsername": "********",
+        "apiPassword": "*********"
+    },
+    "discovery": {
+        "enabled": true,
+        "fortigate": {
+            "url": "https://10.*.*.*:443/api/v2/monitor/user/device/query",
+            "vdom": "root",
+            "accessToken": "**************"
+        }
+    }
+}

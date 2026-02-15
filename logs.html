@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Logs Viewer</title>
+<style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        padding: 20px;
+        background: #f5f5f5;
+    }
+
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .header {
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .header h1 {
+        margin: 0;
+        font-size: 24px;
+    }
+
+    .header p {
+        margin-top: 5px;
+        opacity: 0.9;
+        font-size: 14px;
+    }
+
+    .controls {
+        padding: 20px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .controls label {
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .controls select {
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+        min-width: 250px;
+    }
+
+    .controls button {
+        padding: 8px 16px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.2s;
+    }
+
+    .controls button:hover {
+        background: #5568d3;
+    }
+
+    .stats {
+        padding: 15px 20px;
+        background: #fef3c7;
+        border-bottom: 1px solid #fbbf24;
+        font-size: 14px;
+        color: #92400e;
+    }
+
+    .content {
+        padding: 20px;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    th {
+        background: #f9fafb;
+        padding: 12px 8px;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+        position: sticky;
+        top: 0;
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    th:hover {
+        background: #f3f4f6;
+    }
+
+    th.sortable::after {
+        content: ' ⇅';
+        opacity: 0.3;
+        font-size: 12px;
+    }
+
+    th.sort-asc::after {
+        content: ' ▲';
+        opacity: 1;
+        color: #667eea;
+    }
+
+    th.sort-desc::after {
+        content: ' ▼';
+        opacity: 1;
+        color: #667eea;
+    }
+
+    .filter-row th {
+        padding: 8px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        cursor: default;
+    }
+
+    .filter-row th:hover {
+        background: #ffffff;
+    }
+
+    .filter-row input {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 12px;
+        box-sizing: border-box;
+    }
+
+    .filter-row input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    }
+
+    td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    tr:hover {
+        background: #f9fafb;
+    }
+
+    .status-10 { background-color: #d1fae5; }
+    .status-20 { background-color: #fef3c7; }
+    .status-30 { background-color: #e5e7eb; }
+    .status-40 { background-color: #fee2e2; }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6b7280;
+    }
+
+    .empty-state svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+    }
+
+    .spinner {
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .nav-links {
+        padding: 15px 20px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .nav-links a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+        margin-right: 20px;
+    }
+
+    .nav-links a:hover {
+        text-decoration: underline;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>📊 Monitoring Logs Viewer</h1>
+        <p>View historical monitoring logs and analyze past events</p>
+    </div>
+
+    <div class="nav-links">
+        <a href="/">← Back to Live Monitor</a>
+    </div>
+
+    <div class="controls">
+        <label for="log-select">Select Log File:</label>
+        <select id="log-select">
+            <option value="">Loading...</option>
+        </select>
+        <button id="refresh-btn" onclick="loadLogFiles()">↻ Refresh</button>
+        <span id="file-info" style="margin-left: auto; color: #6b7280; font-size: 13px;"></span>
+    </div>
+
+    <div id="stats" class="stats" style="display: none;">
+        <strong>Log Statistics:</strong> <span id="stats-text"></span>
+    </div>
+
+    <div class="content">
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading logs...</p>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <h3>No Log Selected</h3>
+            <p>Please select a log file from the dropdown above</p>
+        </div>
+
+        <div id="table-container" style="display: none;">
+            <table id="log-table">
+                <thead>
+                    <tr id="table-headers"></tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let logFiles = [];
+let currentLog = null;
+
+// Load available log files
+async function loadLogFiles() {
+    try {
+        const response = await fetch('/logs/');
+        logFiles = await response.json();
+
+        const select = document.getElementById('log-select');
+        select.innerHTML = '<option value="">-- Select a log file --</option>';
+
+        logFiles.forEach(file => {
+            const option = document.createElement('option');
+            option.value = file.filename;
+            const sizeKB = (file.size / 1024).toFixed(2);
+            option.textContent = `${file.date} (${sizeKB} KB)`;
+            select.appendChild(option);
+        });
+
+        // Auto-select most recent if available
+        if (logFiles.length > 0 && !currentLog) {
+            select.value = logFiles[0].filename;
+            loadLogContent(logFiles[0].filename);
+        }
+    } catch (error) {
+        console.error('Error loading log files:', error);
+        document.getElementById('log-select').innerHTML = '<option value="">Error loading files</option>';
+    }
+}
+
+// Load specific log file content
+async function loadLogContent(filename) {
+    if (!filename) {
+        showEmptyState();
+        return;
+    }
+
+    currentLog = filename;
+    showLoading();
+
+    try {
+        const response = await fetch(`/logs/${filename}`);
+        const data = await response.json();
+
+        if (data.length === 0) {
+            showEmptyState('No entries in this log file');
+            return;
+        }
+
+        displayLogTable(data);
+        updateStats(data);
+
+        // Update file info
+        const fileInfo = logFiles.find(f => f.filename === filename);
+        if (fileInfo) {
+            const date = new Date(fileInfo.modified);
+            document.getElementById('file-info').textContent =
+                `${data.length} entries • Last modified: ${date.toLocaleString()}`;
+        }
+    } catch (error) {
+        console.error('Error loading log content:', error);
+        showEmptyState('Error loading log file');
+    }
+}
+
+// Display log data in table
+function displayLogTable(data) {
+    if (data.length === 0) return;
+
+    const headers = Object.keys(data[0]);
+    const headersRow = document.getElementById('table-headers');
+    headersRow.innerHTML = '';
+
+    headers.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headersRow.appendChild(th);
+    });
+
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+
+    data.forEach(entry => {
+        const row = document.createElement('tr');
+
+        // Add status-based row class
+        if (entry.Status) {
+            row.classList.add(`status-${entry.Status}`);
+        }
+
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            td.textContent = entry[header] || '';
+            row.appendChild(td);
+        });
+
+        tbody.appendChild(row);
+    });
+
+    document.getElementById('table-container').style.display = 'block';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('stats').style.display = 'block';
+}
+
+// Update statistics
+function updateStats(data) {
+    const stats = {
+        total: data.length,
+        critical: data.filter(e => e.Status === '40').length,
+        warning: data.filter(e => e.Status === '20' || e.Status === '30').length,
+        ok: data.filter(e => e.Status === '10').length
+    };
+
+    const statsText = `Total: ${stats.total} | ` +
+                     `Critical: ${stats.critical} | ` +
+                     `Warning: ${stats.warning} | ` +
+                     `OK: ${stats.ok}`;
+
+    document.getElementById('stats-text').textContent = statsText;
+}
+
+// Show loading state
+function showLoading() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('table-container').style.display = 'none';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('stats').style.display = 'none';
+}
+
+// Show empty state
+function showEmptyState(message = null) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('table-container').style.display = 'none';
+    document.getElementById('empty-state').style.display = 'block';
+    document.getElementById('stats').style.display = 'none';
+
+    if (message) {
+        const emptyState = document.getElementById('empty-state');
+        emptyState.querySelector('p').textContent = message;
+    }
+}
+
+// Handle log file selection change
+document.getElementById('log-select').addEventListener('change', (e) => {
+    loadLogContent(e.target.value);
+});
+
+// Initial load
+loadLogFiles();
+</script>
+
+</body>
+</html>

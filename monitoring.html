@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETWORK MONITORING</title>
+<style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    th, td {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    .red-row {
+            background-color: red;
+        }
+    .gray-row {
+            background-color: gray;
+        }
+    .yellow-row {
+            background-color: yellow;
+        }
+    .green-row {
+            background-color: lightgreen;
+        }
+    html,body{ 
+	scroll-behavior: smooth}
+    </style>
+</head>
+<body>
+
+<H2>
+    <a href="/diagram.png" target="_blank">OPEN DIAGRAM</a> |
+    <a href="/logs.html">VIEW LOGS</a> |
+    <a href="#" onclick="runDiscovery(); return false;">🔍 RUN DISCOVERY</a> |
+    <a href="#" onclick="showBaselineMenu(); return false;">📊 BASELINE</a>
+</H2>
+<div id="discovery-status" style="padding: 10px; margin: 10px 0; background: #f0f0f0; border-radius: 5px; display: none;"></div>
+<div id="baseline-status" style="padding: 10px; margin: 10px 0; background: #e3f2fd; border-radius: 5px; display: none;"></div>
+<div id="baseline-menu" style="padding: 15px; margin: 10px 0; background: #ffffff; border: 2px solid #2196F3; border-radius: 5px; display: none;">
+    <h3 style="margin-top: 0;">📊 Baseline Management</h3>
+    <p style="color: #666;">Baseline mode monitors only healthy devices (status = 10). Create a baseline to snapshot current healthy devices.</p>
+    <div style="margin: 15px 0;">
+        <button onclick="createBaseline()" style="padding: 10px 20px; margin: 5px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">✓ Create Baseline</button>
+        <button onclick="enableBaseline()" style="padding: 10px 20px; margin: 5px; background: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">▶ Enable Baseline Mode</button>
+        <button onclick="disableBaseline()" style="padding: 10px 20px; margin: 5px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">⏸ Disable Baseline Mode</button>
+        <button onclick="clearBaseline()" style="padding: 10px 20px; margin: 5px; background: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">✗ Clear Baseline</button>
+        <button onclick="hideBaselineMenu()" style="padding: 10px 20px; margin: 5px; background: #9E9E9E; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">Close</button>
+    </div>
+    <div id="baseline-info" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px; font-size: 13px;"></div>
+</div>
+<div id="baseline-indicator" style="padding: 10px; margin: 10px 0; background: #2196F3; color: white; border-radius: 5px; font-weight: bold; text-align: center; display: none;">
+    📊 BASELINE MODE ACTIVE - Monitoring <span id="baseline-count">0</span> baseline devices only
+</div>
+<div id="top"> TOP </div>
+<table id="json-table">
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Name</th>
+            <th>Last Poll</th>
+            <th>IP</th>
+            <th>RTT / %</th>
+            <th>Down polls</th>
+            <th>Down Time</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Table body will be populated by JavaScript -->
+    </tbody>
+</table>
+<script>
+function setFocusToTextBox(){
+    document.getElementById("top").scrollIntoView();
+
+}
+function fetchDataAndUpdateTable() {
+    fetch('/result/')
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.querySelector('#json-table tbody');
+            tableBody.innerHTML = ''; // Clear previous data
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                // Check if status is "false", if so, add class to mark it red
+                const rowClass = item.status === "40" ? 'red-row' : 
+				 item.status === "30" ? 'gray-row' : 
+				 item.status === "20" ? 'yellow-row' : 
+				 'green-row';
+                //const rowClass = item.status === "GrayedTimedOut" ? 'gray-row' : 'green-row';
+                row.innerHTML = `
+                    <td>${item.status}</td>
+                    <td>${item.name}</td>
+                    <td>${item.time}</td>
+                    <td>${item.ip}</td>
+                    <td>${item.rtt}</td>
+                    <td>${item.count}</td>
+                    <td>${item.downtime}</td>
+                `;
+                                row.classList.add(rowClass); // Add the class to the row
+
+                tableBody.appendChild(row);
+            });
+        })
+        .catch(error => console.error('Error fetching data:', error));
+	
+// setFocusToTextBox();
+
+//    document.getElementById("top").scrollIntoView();
+
+}
+
+// Update baseline indicator
+async function updateBaselineIndicator() {
+    try {
+        const response = await fetch('/baseline/status');
+        const status = await response.json();
+
+        const indicator = document.getElementById('baseline-indicator');
+        const countSpan = document.getElementById('baseline-count');
+
+        if (status.enabled && status.exists) {
+            indicator.style.display = 'block';
+            countSpan.textContent = status.deviceCount;
+        } else {
+            indicator.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error updating baseline indicator:', error);
+    }
+}
+
+// Initial call to fetch data
+fetchDataAndUpdateTable();
+updateBaselineIndicator();
+
+// Set interval to fetch data every 10 seconds
+setInterval(fetchDataAndUpdateTable, 5000);
+
+// Check baseline status every 10 seconds
+setInterval(updateBaselineIndicator, 10000);
+
+setInterval(setFocusToTextBox, 60000);
+
+// Discovery function
+async function runDiscovery() {
+    const statusDiv = document.getElementById('discovery-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.innerHTML = '⏳ Running device discovery...';
+
+    try {
+        const response = await fetch('/discovery/run', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.background = '#d4edda';
+            statusDiv.innerHTML = `✓ Discovery completed! Found ${result.devicesDiscovered} devices. Refreshing...`;
+
+            // Refresh the table after 2 seconds
+            setTimeout(() => {
+                fetchDataAndUpdateTable();
+                statusDiv.style.display = 'none';
+            }, 2000);
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.innerHTML = '✗ Discovery failed: ' + result.error;
+        }
+    } catch (error) {
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.innerHTML = '✗ Error running discovery: ' + error.message;
+    }
+}
+
+// Baseline functions
+async function showBaselineMenu() {
+    const menu = document.getElementById('baseline-menu');
+    menu.style.display = 'block';
+    await updateBaselineInfo();
+}
+
+function hideBaselineMenu() {
+    document.getElementById('baseline-menu').style.display = 'none';
+}
+
+async function updateBaselineInfo() {
+    try {
+        const response = await fetch('/baseline/status');
+        const status = await response.json();
+
+        const infoDiv = document.getElementById('baseline-info');
+        let html = '<strong>Baseline Status:</strong><br>';
+
+        if (status.exists) {
+            html += `✓ Baseline exists with ${status.deviceCount} devices<br>`;
+            html += `Created: ${new Date(status.createdAt).toLocaleString()}<br>`;
+            html += `Mode: ${status.enabled ? '<span style="color: green; font-weight: bold;">ENABLED</span>' : '<span style="color: orange;">Disabled</span>'}`;
+        } else {
+            html += '⚠ No baseline created yet';
+        }
+
+        infoDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error fetching baseline status:', error);
+    }
+}
+
+async function createBaseline() {
+    const statusDiv = document.getElementById('baseline-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.innerHTML = '⏳ Creating baseline from healthy devices...';
+
+    try {
+        const response = await fetch('/baseline/create', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.background = '#d4edda';
+            statusDiv.innerHTML = `✓ Baseline created! ${result.healthyDevices} healthy devices out of ${result.totalDevices} total.`;
+            await updateBaselineInfo();
+
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.innerHTML = '✗ Failed to create baseline: ' + result.error;
+        }
+    } catch (error) {
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.innerHTML = '✗ Error creating baseline: ' + error.message;
+    }
+}
+
+async function enableBaseline() {
+    const statusDiv = document.getElementById('baseline-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.innerHTML = '⏳ Enabling baseline mode...';
+
+    try {
+        const response = await fetch('/baseline/enable', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.background = '#d4edda';
+            statusDiv.innerHTML = '✓ Baseline mode enabled! Now monitoring only baseline devices. Refreshing...';
+            await updateBaselineInfo();
+
+            setTimeout(() => {
+                fetchDataAndUpdateTable();
+                statusDiv.style.display = 'none';
+            }, 2000);
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.innerHTML = '✗ Failed to enable baseline: ' + result.error;
+        }
+    } catch (error) {
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.innerHTML = '✗ Error enabling baseline: ' + error.message;
+    }
+}
+
+async function disableBaseline() {
+    const statusDiv = document.getElementById('baseline-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.innerHTML = '⏳ Disabling baseline mode...';
+
+    try {
+        const response = await fetch('/baseline/disable', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.background = '#d4edda';
+            statusDiv.innerHTML = '✓ Baseline mode disabled! Now monitoring all devices. Refreshing...';
+            await updateBaselineInfo();
+
+            setTimeout(() => {
+                fetchDataAndUpdateTable();
+                statusDiv.style.display = 'none';
+            }, 2000);
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.innerHTML = '✗ Failed to disable baseline: ' + result.error;
+        }
+    } catch (error) {
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.innerHTML = '✗ Error disabling baseline: ' + error.message;
+    }
+}
+
+async function clearBaseline() {
+    if (!confirm('Are you sure you want to clear the baseline? This will delete the baseline file and disable baseline mode.')) {
+        return;
+    }
+
+    const statusDiv = document.getElementById('baseline-status');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.innerHTML = '⏳ Clearing baseline...';
+
+    try {
+        const response = await fetch('/baseline/clear', {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            statusDiv.style.background = '#d4edda';
+            statusDiv.innerHTML = '✓ Baseline cleared! Now monitoring all devices. Refreshing...';
+            await updateBaselineInfo();
+
+            setTimeout(() => {
+                fetchDataAndUpdateTable();
+                statusDiv.style.display = 'none';
+            }, 2000);
+        } else {
+            statusDiv.style.background = '#f8d7da';
+            statusDiv.innerHTML = '✗ Failed to clear baseline: ' + result.error;
+        }
+    } catch (error) {
+        statusDiv.style.background = '#f8d7da';
+        statusDiv.innerHTML = '✗ Error clearing baseline: ' + error.message;
+    }
+}
+
+</script>
+
+
+</body>
+</html>
