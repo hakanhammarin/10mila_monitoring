@@ -2,7 +2,7 @@
     "timers": {
         "pollInterval": 10,
         "webRefreshInterval": 5000,
-        "pingTimeout": 600,
+        "pingTimeout": 2000,
         "logRetentionDays": 30,
         "discoveryInterval": 300
     },
@@ -10,7 +10,9 @@
         "downThreshold": 4,
         "highRttThreshold": 500,
         "fuelWarningLevel": 50,
-        "fuelCriticalLevel": 10
+        "fuelCriticalLevel": 10,
+         "powerlossWarningLevel": 30,
+        "powerlossCriticalLevel": 10
     },
     "paths": {
         "cisConfig": "./cis.json",
