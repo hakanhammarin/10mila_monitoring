@@ -7,6 +7,7 @@ A high-performance network monitoring solution built with Node.js and Express, c
 - **Threaded/Async Polling**: Non-blocking polling ensures timeouts don't delay the polling interval
 - **ICMP Monitoring**: Ping-based monitoring for network devices
 - **FUEL API Monitoring**: Custom API endpoint monitoring for fuel level tracking
+- **mDNS/DNS-SD Discovery**: Zero-configuration discovery of PowerLoss agents via `_powerloss._tcp` (compatible with Bonjour, Avahi, and OpenThread Border Router)
 - **Real-time Web Interface**: Live-updating HTML dashboard with color-coded status
 - **Automatic Logging**: CSV logging with automatic rotation
 - **Configurable Settings**: All timers and thresholds in `settings.json`
@@ -107,6 +108,7 @@ Configure monitored devices:
 **Device Types:**
 - `icmp`: Standard ICMP ping monitoring
 - `FUEL`: Custom API endpoint for fuel level monitoring
+- `powerloss`: Power Loss Agent monitoring — queries `{ip}/api/status` for battery SOC and charging status (see Power Loss Agent below)
 
 **Special Status Values:**
 - `PORTABLE`: Device is portable/mobile, timeouts will be marked as gray (status 30) instead of red
@@ -158,6 +160,102 @@ The interface automatically refreshes every 5 seconds and displays:
 - `GET /result/` - JSON data of current monitoring results
 - `GET /diagram.png` - Network diagram (if available)
 - `GET /health` - Health check endpoint
+- `GET /powerloss/agents` - List all mDNS-discovered PowerLoss agents with current status
+- `GET /powerloss/status` - mDNS discovery status and configuration
+- `POST /powerloss/probe` - Trigger immediate re-probe of all known agents
+
+## Power Loss Agent Monitoring
+
+The `powerloss` device type monitors Windows laptops running the [Power Loss Agent](https://github.com/your-org/powerloss-agent). The agent exposes a REST API with battery status.
+
+### Configuration
+
+Add entries to `cis.json`:
+
+```json
+{
+  "index": "auto-generated-guid",
+  "type": "powerloss",
+  "ip": "http://192.168.1.100:3000",
+  "name": "Laptop - Office",
+  "group": "Laptops",
+  "status": "0"
+}
+```
+
+The monitor queries `{ip}/api/status` which returns:
+- `computer_name` — Windows computer name
+- `location` — Physical location (from agent settings)
+- `charging` — Boolean, whether AC power is connected
+- `soc` — State of Charge (0-100%)
+
+### Status Logic
+
+| SOC Range | Status | Description |
+|-----------|--------|-------------|
+| >= 30% (warningLevel) | 10 (Green) | Battery OK |
+| 11-29% | 20 (Yellow) | Battery low — warning |
+| <= 10% (criticalLevel) | 40 (Red) | Battery critical — risk of power loss |
+
+### Thresholds
+
+Configure in `settings.json`:
+```json
+"thresholds": {
+  "powerlossWarningLevel": 30,
+  "powerlossCriticalLevel": 10
+}
+```
+
+## mDNS / Zero-Configuration PowerLoss Agent Discovery
+
+The monitoring server can automatically discover Windows laptops running the [PowerLoss Agent](../powerloss-agent/) without manual IP configuration. Discovery uses standard **mDNS/DNS-SD** (Bonjour / Avahi protocol), the same foundation used by Apple AirPrint, Chromecast, and Google's **OpenThread** Border Router.
+
+### How it works
+
+1. Each PowerLoss Agent registers itself as `_powerloss._tcp.local` via mDNS on startup.
+2. The monitoring server runs a DNS-SD browser that listens for `_powerloss._tcp` announcements.
+3. When an agent is found, the server probes `http://<ip>:<port>/api/status` and stores the result.
+4. Known agents are re-probed every `mdns.probeInterval` seconds (default: 30).
+5. Discovered agents persist to `result/powerloss_agents.json` across restarts.
+
+### Configuration (`settings.json`)
+
+```json
+"mdns": {
+    "enabled": true,
+    "serviceType": "powerloss",
+    "probeInterval": 30
+}
+```
+
+Set `enabled: false` to turn off mDNS browsing without affecting other discovery methods.
+
+### OpenThread / Thread network compatibility
+
+`_powerloss._tcp` is a standard DNS-SD service type (RFC 6763 over RFC 6762 mDNS). An OpenThread Border Router bridges mDNS between Thread mesh networks and standard Ethernet/Wi-Fi, so PowerLoss agents on Thread-connected hosts appear in the same browser automatically — no extra configuration required.
+
+### Agent response example
+
+`GET /powerloss/agents` returns:
+
+```json
+[
+  {
+    "id": "PowerLoss-Agent-LAPTOP01",
+    "host": "LAPTOP01.local",
+    "ip": "192.168.1.42",
+    "port": 8080,
+    "online": true,
+    "discoveredVia": "mdns",
+    "lastProbed": "2026-06-05T12:00:00.000Z",
+    "computer_name": "LAPTOP01",
+    "location": "Office A",
+    "is_charging": false,
+    "soc": 67
+  }
+]
+```
 
 ## Logging
 

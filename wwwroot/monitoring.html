@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETWORK MONITORING</title>
+<style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    th, td {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    .red-row    { background-color: red; }
+    .gray-row   { background-color: gray; }
+    .yellow-row { background-color: yellow; }
+    .green-row  { background-color: lightgreen; }
+    html, body  { scroll-behavior: smooth; }
+
+    /* Tabs */
+    .tab-bar {
+        display: flex;
+        gap: 4px;
+        margin: 12px 0 0 0;
+    }
+    .tab-btn {
+        padding: 10px 22px;
+        font-size: 14px;
+        font-weight: bold;
+        border: 2px solid #bbb;
+        border-bottom: none;
+        background: #e8e8e8;
+        cursor: pointer;
+        border-radius: 6px 6px 0 0;
+    }
+    .tab-btn.active {
+        background: #ffffff;
+        border-color: #2196F3;
+        color: #2196F3;
+    }
+    .tab-pane {
+        display: none;
+        border: 2px solid #bbb;
+        border-radius: 0 6px 6px 6px;
+        padding: 12px;
+    }
+    .tab-pane.active { display: block; }
+
+    /* Server tab summary bar */
+    .server-summary {
+        font-size: 13px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin-bottom: 10px;
+        color: #333;
+    }
+</style>
+</head>
+<body>
+
+<H2>
+    <a href="/diagram.svg" target="_blank">LLDP DIAGRAM</a> |
+    <a href="/diagram.png" target="_blank">DIAGRAM (PNG)</a> |
+    <a href="/logs.html">VIEW LOGS</a> |
+    <a href="#" onclick="runDiscovery(); return false;">🔍 RUN DISCOVERY</a> |
+    <a href="#" onclick="showBaselineMenu(); return false;">📊 BASELINE</a>
+</H2>
+
+<div id="discovery-status" style="padding: 10px; margin: 10px 0; background: #f0f0f0; border-radius: 5px; display: none;"></div>
+<div id="baseline-status"  style="padding: 10px; margin: 10px 0; background: #e3f2fd; border-radius: 5px; display: none;"></div>
+
+<div id="baseline-menu" style="padding: 15px; margin: 10px 0; background: #ffffff; border: 2px solid #2196F3; border-radius: 5px; display: none;">
+    <h3 style="margin-top: 0;">📊 Baseline Management</h3>
+    <p style="color: #666;">Baseline mode monitors only healthy devices (status = 10). Create a baseline to snapshot current healthy devices.</p>
+    <div style="margin: 15px 0;">
+        <button onclick="createBaseline()"  style="padding: 10px 20px; margin: 5px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">✓ Create Baseline</button>
+        <button onclick="enableBaseline()"  style="padding: 10px 20px; margin: 5px; background: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">▶ Enable Baseline Mode</button>
+        <button onclick="disableBaseline()" style="padding: 10px 20px; margin: 5px; background: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">⏸ Disable Baseline Mode</button>
+        <button onclick="clearBaseline()"   style="padding: 10px 20px; margin: 5px; background: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">✗ Clear Baseline</button>
+        <button onclick="hideBaselineMenu()" style="padding: 10px 20px; margin: 5px; background: #9E9E9E; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">Close</button>
+    </div>
+    <div id="baseline-info" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px; font-size: 13px;"></div>
+</div>
+
+<div id="baseline-indicator" style="padding: 10px; margin: 10px 0; background: #2196F3; color: white; border-radius: 5px; font-weight: bold; text-align: center; display: none;">
+    📊 BASELINE MODE ACTIVE - Monitoring <span id="baseline-count">0</span> baseline devices only
+</div>
+
+<div id="top"></div>
+
+<!-- Tab navigation -->
+<div class="tab-bar">
+    <button class="tab-btn active" id="btn-all"      onclick="showTab('all')">All</button>
+    <button class="tab-btn"        id="btn-network"  onclick="showTab('network')">Network</button>
+    <button class="tab-btn"        id="btn-Internet" onclick="showTab('Internet')">Internet <span id="badge-Internet"></span></button>
+    <button class="tab-btn"        id="btn-Switch"   onclick="showTab('Switch')">Switch <span id="badge-Switch"></span></button>
+    <button class="tab-btn"        id="btn-WiFi"     onclick="showTab('WiFi')">WiFi <span id="badge-WiFi"></span></button>
+    <button class="tab-btn"        id="btn-server01" onclick="showTab('server01')">Server01 <span id="badge-server01"></span></button>
+    <button class="tab-btn"        id="btn-server02" onclick="showTab('server02')">Server02 <span id="badge-server02"></span></button>
+</div>
+
+<!-- All tab (default) -->
+<div class="tab-pane active" id="tab-all">
+    <table id="table-all">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>IP / Info</th><th>RTT / Metrics</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Network tab -->
+<div class="tab-pane" id="tab-network">
+    <table id="table-network">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>IP</th><th>RTT / Info</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Internet tab -->
+<div class="tab-pane" id="tab-Internet">
+    <div class="server-summary" id="summary-Internet">Waiting for data...</div>
+    <table id="table-Internet">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>IP / URL</th><th>RTT / Metrics</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Switch tab -->
+<div class="tab-pane" id="tab-Switch">
+    <div class="server-summary" id="summary-Switch">Waiting for data...</div>
+    <table id="table-Switch">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>IP</th><th>RTT</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- WiFi tab -->
+<div class="tab-pane" id="tab-WiFi">
+    <div class="server-summary" id="summary-WiFi">Waiting for data...</div>
+    <table id="table-WiFi">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>IP</th><th>RTT</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Server01 tab -->
+<div class="tab-pane" id="tab-server01">
+    <div class="server-summary" id="summary-server01">Waiting for data...</div>
+    <table id="table-server01">
+        <thead>
+            <tr>
+                <th>Status</th><th>Service</th><th>Last Poll</th>
+                <th>Metrics</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Server02 tab -->
+<div class="tab-pane" id="tab-server02">
+    <div class="server-summary" id="summary-server02">Waiting for data...</div>
+    <table id="table-server02">
+        <thead>
+            <tr>
+                <th>Status</th><th>Service</th><th>Last Poll</th>
+                <th>Metrics</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+// ── Tab switching ────────────────────────────────────────────────────────────
+let activeTab = 'all';
+
+function showTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('btn-' + tab).classList.add('active');
+}
+
+// ── Row colour helper ────────────────────────────────────────────────────────
+function rowClass(status) {
+    if (status === '40') return 'red-row';
+    if (status === '30') return 'gray-row';
+    if (status === '20') return 'yellow-row';
+    return 'green-row';
+}
+
+// ── Populate a standard network-style table ──────────────────────────────────
+function populateNetworkTable(tableId, rows) {
+    const tbody = document.querySelector('#' + tableId + ' tbody');
+    tbody.innerHTML = '';
+    rows.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = rowClass(item.status);
+        tr.innerHTML = `
+            <td>${item.status}</td>
+            <td>${item.name}</td>
+            <td>${item.time}</td>
+            <td>${item.ip}</td>
+            <td>${item.rtt}</td>
+            <td>${item.count}</td>
+            <td>${item.downtime}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ── Populate a server-services table ────────────────────────────────────────
+function populateServerTable(tableId, summaryId, rows) {
+    const tbody = document.querySelector('#' + tableId + ' tbody');
+    tbody.innerHTML = '';
+    rows.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = rowClass(item.status);
+        tr.innerHTML = `
+            <td>${item.status}</td>
+            <td>${item.name}</td>
+            <td>${item.time}</td>
+            <td>${item.rtt}</td>
+            <td>${item.count}</td>
+            <td>${item.downtime}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    // Update summary badge on the tab button
+    const anyRed = rows.some(r => r.status === '40');
+    const anyYellow = rows.some(r => r.status === '20');
+    const badge = document.getElementById('badge-' + summaryId);
+    if (badge) {
+        badge.textContent = anyRed ? '🔴' : anyYellow ? '🟡' : '🟢';
+    }
+
+    // Update summary bar (last collected_at is encoded in the rtt/time of any row)
+    const lastPoll = rows.length ? rows[0].time : '—';
+    document.getElementById('summary-' + summaryId).textContent =
+        `Last poll: ${lastPoll}  |  Services: ${rows.length}  |  ` +
+        `Down: ${rows.filter(r => r.status === '40').length}`;
+}
+
+// ── Main data fetch ──────────────────────────────────────────────────────────
+function fetchDataAndUpdateTable() {
+    fetch('/result/')
+        .then(r => r.json())
+        .then(data => {
+            const network  = data.filter(d => !d.group);
+            const server01 = data.filter(d => d.group === 'server01');
+            const server02 = data.filter(d => d.group === 'server02');
+
+            const internet  = data.filter(d => d.group === 'Internet');
+            const switches = data.filter(d => d.group === 'Switch');
+            const wifi     = data.filter(d => d.group === 'WiFi');
+
+            populateNetworkTable('table-all',     data);      // All tab — everything
+            populateNetworkTable('table-network', network);
+            populateServerTable('table-Internet', 'Internet', internet);
+            populateServerTable('table-Switch',   'Switch',   switches);
+            populateServerTable('table-WiFi',     'WiFi',     wifi);
+            populateServerTable('table-server01', 'server01', server01);
+            populateServerTable('table-server02', 'server02', server02);
+        })
+        .catch(err => console.error('Error fetching data:', err));
+}
+
+// ── Baseline indicator ───────────────────────────────────────────────────────
+async function updateBaselineIndicator() {
+    try {
+        const response = await fetch('/baseline/status');
+        const status = await response.json();
+        const indicator = document.getElementById('baseline-indicator');
+        if (status.enabled && status.exists) {
+            indicator.style.display = 'block';
+            document.getElementById('baseline-count').textContent = status.deviceCount;
+        } else {
+            indicator.style.display = 'none';
+        }
+    } catch (e) { console.error('Error updating baseline indicator:', e); }
+}
+
+// ── Scroll + tab reset ───────────────────────────────────────────────────────
+function setFocusToTextBox() {
+    showTab('all');
+    document.getElementById('top').scrollIntoView();
+}
+
+// ── Init + polling ───────────────────────────────────────────────────────────
+fetchDataAndUpdateTable();
+updateBaselineIndicator();
+setInterval(fetchDataAndUpdateTable,   5000);
+setInterval(updateBaselineIndicator, 10000);
+setInterval(setFocusToTextBox,       60000);
+
+// ── Discovery ────────────────────────────────────────────────────────────────
+async function runDiscovery() {
+    const div = document.getElementById('discovery-status');
+    div.style.display = 'block';
+    div.style.background = '#fff3cd';
+    div.innerHTML = '⏳ Running device discovery...';
+    try {
+        const res = await fetch('/discovery/run', { method: 'POST' });
+        const result = await res.json();
+        if (result.success) {
+            div.style.background = '#d4edda';
+            div.innerHTML = `✓ Discovery completed! Found ${result.devicesDiscovered} devices. Refreshing...`;
+            setTimeout(() => { fetchDataAndUpdateTable(); div.style.display = 'none'; }, 2000);
+        } else {
+            div.style.background = '#f8d7da';
+            div.innerHTML = '✗ Discovery failed: ' + result.error;
+        }
+    } catch (e) {
+        div.style.background = '#f8d7da';
+        div.innerHTML = '✗ Error running discovery: ' + e.message;
+    }
+}
+
+// ── Baseline ─────────────────────────────────────────────────────────────────
+function showBaselineMenu()  { document.getElementById('baseline-menu').style.display = 'block'; updateBaselineInfo(); }
+function hideBaselineMenu()  { document.getElementById('baseline-menu').style.display = 'none'; }
+
+async function updateBaselineInfo() {
+    try {
+        const res = await fetch('/baseline/status');
+        const s = await res.json();
+        const div = document.getElementById('baseline-info');
+        let html = '<strong>Baseline Status:</strong><br>';
+        if (s.exists) {
+            html += `✓ Baseline exists with ${s.deviceCount} devices<br>`;
+            html += `Created: ${new Date(s.createdAt).toLocaleString()}<br>`;
+            html += `Mode: ${s.enabled ? '<span style="color:green;font-weight:bold;">ENABLED</span>' : '<span style="color:orange;">Disabled</span>'}`;
+        } else {
+            html += '⚠ No baseline created yet';
+        }
+        div.innerHTML = html;
+    } catch (e) { console.error('Error fetching baseline status:', e); }
+}
+
+async function baselineAction(url, method, loadingMsg, okMsg) {
+    const div = document.getElementById('baseline-status');
+    div.style.display = 'block';
+    div.style.background = '#fff3cd';
+    div.innerHTML = loadingMsg;
+    try {
+        const res = await fetch(url, { method });
+        const result = await res.json();
+        if (result.success) {
+            div.style.background = '#d4edda';
+            div.innerHTML = okMsg;
+            await updateBaselineInfo();
+            setTimeout(() => { fetchDataAndUpdateTable(); div.style.display = 'none'; }, 2000);
+        } else {
+            div.style.background = '#f8d7da';
+            div.innerHTML = '✗ Failed: ' + result.error;
+        }
+    } catch (e) {
+        div.style.background = '#f8d7da';
+        div.innerHTML = '✗ Error: ' + e.message;
+    }
+}
+
+function createBaseline()  { baselineAction('/baseline/create',  'POST',   '⏳ Creating baseline...', `✓ Baseline created!`); }
+function enableBaseline()  { baselineAction('/baseline/enable',  'POST',   '⏳ Enabling baseline mode...', '✓ Baseline mode enabled! Refreshing...'); }
+function disableBaseline() { baselineAction('/baseline/disable', 'POST',   '⏳ Disabling baseline mode...', '✓ Baseline mode disabled! Refreshing...'); }
+async function clearBaseline() {
+    if (!confirm('Clear the baseline? This will delete the baseline file and disable baseline mode.')) return;
+    baselineAction('/baseline/clear', 'DELETE', '⏳ Clearing baseline...', '✓ Baseline cleared! Refreshing...');
+}
+</script>
+
+</body>
+</html>

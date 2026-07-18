@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const NetworkMonitor = require('./monitor');
 const DeviceDiscovery = require('./discovery');
+const PowerlossDiscovery = require('./powerloss-discovery');
 
 // Load settings
 let settings;
@@ -22,6 +23,28 @@ const HOST = settings.server.host;
 // Initialize monitor and discovery
 const monitor = new NetworkMonitor(settings);
 const discovery = new DeviceDiscovery(settings);
+const powerlossDiscovery = new PowerlossDiscovery(settings);
+
+// Parse a CSV line handling quoted fields
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+            inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    result.push(current.trim());
+    return result;
+}
 
 // Middleware to log requests
 app.use((req, res, next) => {
@@ -59,15 +82,39 @@ app.get('/result/', async (req, res) => {
     }
 });
 
-// Route: Serve diagram image
+// Route: Serve diagram image (PNG)
 app.get('/diagram.png', async (req, res) => {
     try {
-        // Convert to absolute path - res.sendFile requires absolute paths
         const diagramPath = path.resolve(path.dirname(settings.paths.resultJson), 'diagram.png');
         res.sendFile(diagramPath);
     } catch (error) {
         console.error('Error serving diagram.png:', error);
         res.status(404).send('Diagram not found');
+    }
+});
+
+// Route: Serve LLDP topology SVG diagram
+app.get('/diagram.svg', async (req, res) => {
+    try {
+        const diagramPath = path.resolve(path.dirname(settings.paths.resultJson), 'diagram.svg');
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.sendFile(diagramPath);
+    } catch (error) {
+        console.error('Error serving diagram.svg:', error);
+        res.status(404).send('LLDP diagram not found — run lldp_scraper.js first');
+    }
+});
+
+// Route: Serve raw LLDP JSON data
+app.get('/lldp.json', async (req, res) => {
+    try {
+        const lldpPath = path.resolve(path.dirname(settings.paths.resultJson), 'lldp_result.json');
+        const data = await fs.readFile(lldpPath, 'utf8');
+        res.contentType('application/json');
+        res.send(data);
+    } catch (error) {
+        res.contentType('application/json');
+        res.send('[]');
     }
 });
 
@@ -77,8 +124,45 @@ app.get('/health', (req, res) => {
         status: 'ok',
         monitor: monitor.isRunning ? 'running' : 'stopped',
         discovery: discovery.isRunning ? 'running' : 'stopped',
+        powerlossDiscovery: powerlossDiscovery.isRunning ? 'running' : 'stopped',
+        powerlossAgents: powerlossDiscovery.getAgents().length,
         timestamp: new Date().toISOString()
     });
+});
+
+// Route: List mDNS-discovered PowerLoss agents (from cis_discovery.json, source=mdns)
+app.get('/powerloss/agents', async (req, res) => {
+    try {
+        const data = await fs.readFile(settings.paths.cisDiscovery, 'utf8');
+        const all = JSON.parse(data);
+        res.json(all.filter(d => d.source === 'mdns'));
+    } catch {
+        res.json([]);
+    }
+});
+
+// Route: PowerLoss discovery status
+app.get('/powerloss/status', (req, res) => {
+    res.json({
+        enabled: settings.mdns?.enabled ?? false,
+        running: powerlossDiscovery.isRunning,
+        serviceType: `_${settings.mdns?.serviceType || 'powerloss'}._tcp`,
+        probeInterval: settings.mdns?.probeInterval || 30,
+        agentCount: powerlossDiscovery.getAgents().length
+    });
+});
+
+// Route: Trigger re-probe of all mDNS-discovered agents
+app.post('/powerloss/probe', async (req, res) => {
+    try {
+        await powerlossDiscovery._probeAll();
+        res.json({
+            success: true,
+            agents: powerlossDiscovery.getAgents()
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // Route: Trigger manual discovery
@@ -363,15 +447,18 @@ app.get('/logs/:filename', async (req, res) => {
         }
 
         // First line is header
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const headers = parseCSVLine(lines[0]);
+        const headerLine = lines[0].trim();
         const data = [];
 
         for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',');
+            const line = lines[i].trim();
+            if (!line || line === headerLine) continue; // Skip empty and duplicate header lines
+            const values = parseCSVLine(line);
             const entry = {};
 
             headers.forEach((header, index) => {
-                entry[header] = values[index] ? values[index].trim().replace(/"/g, '') : '';
+                entry[header] = values[index] || '';
             });
 
             data.push(entry);
@@ -389,6 +476,7 @@ process.on('SIGINT', () => {
     console.log('\nShutting down gracefully...');
     monitor.stop();
     discovery.stop();
+    powerlossDiscovery.stop();
     process.exit(0);
 });
 
@@ -396,6 +484,7 @@ process.on('SIGTERM', () => {
     console.log('\nShutting down gracefully...');
     monitor.stop();
     discovery.stop();
+    powerlossDiscovery.stop();
     process.exit(0);
 });
 
@@ -407,10 +496,16 @@ async function start() {
 
     // Start discovery first (if enabled)
     if (settings.discovery.enabled) {
-        console.log('\n📡 Starting device discovery...');
+        console.log('\nStarting device discovery...');
         discovery.start();
         // Wait a moment for first discovery to complete
         await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // Start mDNS PowerLoss agent discovery
+    if (settings.mdns?.enabled) {
+        console.log('\nStarting mDNS PowerLoss discovery...');
+        await powerlossDiscovery.start();
     }
 
     // Initialize monitor (will load both static and discovered devices)

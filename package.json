@@ -17,6 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.6.5",
+    "bonjour-service": "^1.2.1",
     "express": "^4.18.2",
     "ping": "^0.4.4"
   },

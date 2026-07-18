@@ -54,11 +54,13 @@ class DeviceDiscovery {
                 const ip = device.ipv4_address ||
                           device.ip_address ||
                           device.ip ||
+                          device.addr ||
                           'unknown';
 
                 // Create device name from available fields
                 const name = device.hostname ||
                            device.name ||
+                           (device.host && device.host.name) ||
                            device.device_name ||
                            device.mac ||
                            `Device-${ip}`;
@@ -73,7 +75,7 @@ class DeviceDiscovery {
                     index: '',  // Will be auto-generated
                     type: 'icmp',
                     ip: ip,
-                    name: `[FG] ${name}`,  // Prefix with [FG] to identify Fortigate discoveries
+                    name: `${name} *`,  // Prefix with [FG] to identify Fortigate discoveries
                     status: '0',
                     time: '',
                     rtt: 0,

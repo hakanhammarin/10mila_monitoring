@@ -401,7 +401,9 @@ class NetworkMonitor {
             const data = response.data;
             const computerName = data.computer_name || ci.name;
             const location = data.location || '';
-            const ipAddrs = Array.isArray(data.ip_addresses) ? data.ip_addresses.join(', ') : '';
+            const ipAddrs = Array.isArray(data.ip_addresses)
+                ? data.ip_addresses.filter(a => !a.startsWith('169.254.')).join(', ')
+                : '';
             const charging = data.is_charging === true;
             const soc = data.soc ?? 0;
 
@@ -590,10 +592,10 @@ class NetworkMonitor {
 
         // Sort by status (descending) and name (ascending)
         const sortedData = [...this.cisData].sort((a, b) => {
-            if (b.status !== a.status) {
-                return b.status.localeCompare(a.status);
-            }
-            return a.name.localeCompare(b.name);
+            const sa = String(a.status ?? '');
+            const sb = String(b.status ?? '');
+            if (sb !== sa) return sb.localeCompare(sa);
+            return (a.name ?? '').localeCompare(b.name ?? '');
         });
 
         // Save results
@@ -605,7 +607,7 @@ class NetworkMonitor {
             const statusIcon = ci.status === '10' ? '✓' :
                               ci.status === '20' ? '⚠' :
                               ci.status === '30' ? '○' : '✗';
-            console.log(`${statusIcon} ${ci.name.padEnd(30)} | Status: ${ci.status} | RTT: ${ci.rtt}`);
+            console.log(`${statusIcon} ${(ci.name ?? '').padEnd(30)} | Status: ${ci.status} | RTT: ${ci.rtt}`);
         });
         console.log('===================\n');
 

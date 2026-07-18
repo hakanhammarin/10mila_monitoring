@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 # Network Monitoring System - Startup Script (Linux/macOS)
 
 echo "========================================="
