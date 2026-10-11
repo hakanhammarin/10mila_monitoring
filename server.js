@@ -25,6 +25,14 @@ const monitor = new NetworkMonitor(settings);
 const discovery = new DeviceDiscovery(settings);
 const powerlossDiscovery = new PowerlossDiscovery(settings);
 
+// A PowerLoss agent found over mDNS joins the monitored list right away (no restart needed).
+// Agents usually answer in a burst, so wait until it has been quiet for 2 s and reload once.
+let newAgentTimer = null;
+powerlossDiscovery.onNewAgent = () => {
+    clearTimeout(newAgentTimer);
+    newAgentTimer = setTimeout(() => monitor.reloadConfiguration(), 2000);
+};
+
 // Parse a CSV line handling quoted fields
 function parseCSVLine(line) {
     const result = [];

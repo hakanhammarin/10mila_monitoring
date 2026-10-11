@@ -89,6 +89,7 @@ class PowerlossDiscovery {
         const url = `http://${ip}:${port}/api/status`;
         try {
             const { data } = await axios.get(url, { timeout: 5000 });
+            const isNew = !this.agents.has(name);
             const existing = this.agents.get(name) || {};
             const agent = {
                 id: name,
@@ -110,6 +111,8 @@ class PowerlossDiscovery {
             this.agents.set(name, agent);
             await this._saveToCis();
             console.log(`[mDNS] ${name}: SOC=${data.soc}% charging=${data.is_charging}`);
+            // A new agent is only in cis_discovery.json so far: tell the server, so it shows up without a restart
+            if (isNew && this.onNewAgent) this.onNewAgent(agent);
         } catch (err) {
             console.log(`[mDNS] Probe failed ${name} @ ${url}: ${err.message}`);
             if (this.agents.has(name)) {
@@ -121,7 +124,8 @@ class PowerlossDiscovery {
 
     async _probeAll() {
         for (const agent of this.agents.values()) {
-            if (agent.ip) await this._probeService(agent);
+            // Stored agents carry their service name as "id"; without it the probe filed its result under "undefined"
+            if (agent.ip) await this._probeService({ ...agent, name: agent.id });
         }
     }
 
