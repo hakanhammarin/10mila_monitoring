@@ -368,6 +368,10 @@ class NetworkMonitor {
             if (svc.active_processes   !== undefined) parts.push(`Active: ${svc.active_processes}`);
             if (svc.listen_queue       !== undefined) parts.push(`Queue: ${svc.listen_queue}`);
             if (svc.requests_s         != null) parts.push(`Req/s: ${svc.requests_s}`);
+            if (svc.heartbeat_age_s    != null) parts.push(`Heartbeat: ${svc.heartbeat_age_s}s`);
+            if (svc.delay_ms           != null) parts.push(`Delay: ${svc.delay_ms}ms`);
+            if (svc.jitter_ms          != null) parts.push(`Jitter: ${svc.jitter_ms}ms`);
+            if (svc.reason)                     parts.push(svc.reason);
             ci.rtt = parts.join('  ');
 
             const isDown = !svc.available || svc.db_available === false;
