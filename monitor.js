@@ -343,7 +343,8 @@ class NetworkMonitor {
             });
 
             const data = response.data;
-            const svc = data.services && data.services[ci.serviceKey];
+            // serviceKey may be a path into the services object, e.g. "web.nginx" or "web.fpm"
+            const svc = String(ci.serviceKey || '').split('.').reduce((o, k) => o && o[k], data.services);
 
             if (!svc) {
                 ci.status = '40';
@@ -361,6 +362,12 @@ class NetworkMonitor {
             if (svc.process_running  !== undefined) parts.push(`Proc: ${svc.process_running}`);
             if (svc.monitor_port     !== undefined) parts.push(`Port: ${svc.monitor_port}`);
             if (svc.monitor_port_ok  !== undefined) parts.push(`PortOK: ${svc.monitor_port_ok}`);
+            if (svc.rtt_ms             != null) parts.push(`RTT: ${svc.rtt_ms}ms`);
+            if (svc.active_connections !== undefined) parts.push(`Active: ${svc.active_connections}`);
+            if (svc.waiting            !== undefined) parts.push(`Waiting: ${svc.waiting}`);
+            if (svc.active_processes   !== undefined) parts.push(`Active: ${svc.active_processes}`);
+            if (svc.listen_queue       !== undefined) parts.push(`Queue: ${svc.listen_queue}`);
+            if (svc.requests_s         != null) parts.push(`Req/s: ${svc.requests_s}`);
             ci.rtt = parts.join('  ');
 
             const isDown = !svc.available || svc.db_available === false;
