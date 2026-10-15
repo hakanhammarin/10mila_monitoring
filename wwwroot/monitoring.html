@@ -223,6 +223,12 @@ function rowClass(status) {
     return 'green-row';
 }
 
+// Item name, linked to its host's own page (e.g. healthcheck.html) when the item has a url
+function nameCell(item) {
+    if (!/^https?:\/\//.test(item.url || '')) return item.name;
+    return `<a href="${encodeURI(item.url)}" target="_blank" rel="noopener" style="color:inherit">${item.name}</a>`;
+}
+
 // ── Populate a standard network-style table ──────────────────────────────────
 function populateNetworkTable(tableId, rows) {
     const tbody = document.querySelector('#' + tableId + ' tbody');
@@ -232,7 +238,7 @@ function populateNetworkTable(tableId, rows) {
         tr.className = rowClass(item.status);
         tr.innerHTML = `
             <td>${item.status}</td>
-            <td>${item.name}</td>
+            <td>${nameCell(item)}</td>
             <td>${item.time}</td>
             <td>${item.ip}</td>
             <td>${item.rtt}</td>
@@ -251,7 +257,7 @@ function populateServerTable(tableId, summaryId, rows) {
         tr.className = rowClass(item.status);
         tr.innerHTML = `
             <td>${item.status}</td>
-            <td>${item.name}</td>
+            <td>${nameCell(item)}</td>
             <td>${item.time}</td>
             <td>${item.rtt}</td>
             <td>${item.count}</td>
