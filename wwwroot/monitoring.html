@@ -100,6 +100,7 @@
 <div class="tab-bar">
     <button class="tab-btn active" id="btn-all"      onclick="showTab('all')">All</button>
     <button class="tab-btn"        id="btn-network"  onclick="showTab('network')">Network</button>
+    <button class="tab-btn"        id="btn-computers" onclick="showTab('computers')">Computers <span id="badge-computers"></span></button>
     <button class="tab-btn"        id="btn-Internet" onclick="showTab('Internet')">Internet <span id="badge-Internet"></span></button>
     <button class="tab-btn"        id="btn-Switch"   onclick="showTab('Switch')">Switch <span id="badge-Switch"></span></button>
     <button class="tab-btn"        id="btn-WiFi"     onclick="showTab('WiFi')">WiFi <span id="badge-WiFi"></span></button>
@@ -127,6 +128,19 @@
             <tr>
                 <th>Status</th><th>Name</th><th>Last Poll</th>
                 <th>IP</th><th>RTT / Info</th><th>Down polls</th><th>Down Time</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Computers tab: the laptops and print stations, found by their PowerLoss agent -->
+<div class="tab-pane" id="tab-computers">
+    <table id="table-computers">
+        <thead>
+            <tr>
+                <th>Status</th><th>Name</th><th>Last Poll</th>
+                <th>Agent</th><th>Battery / Info</th><th>Down polls</th><th>Down Time</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -285,7 +299,8 @@ function fetchDataAndUpdateTable() {
     fetch('/result/')
         .then(r => r.json())
         .then(data => {
-            const network  = data.filter(d => !d.group);
+            const computers = data.filter(d => d.type === 'powerloss');
+            const network  = data.filter(d => !d.group && d.type !== 'powerloss');
             const server01 = data.filter(d => d.group === 'server01');
             const server02 = data.filter(d => d.group === 'server02');
 
@@ -295,6 +310,9 @@ function fetchDataAndUpdateTable() {
 
             populateNetworkTable('table-all',     data);      // All tab — everything
             populateNetworkTable('table-network', network);
+            populateNetworkTable('table-computers', computers);
+            document.getElementById('badge-computers').textContent = computers.length
+                ? `${computers.length} ${computers.some(r => r.status === '40') ? '🔴' : computers.some(r => r.status === '20') ? '🟡' : '🟢'}` : '';
             populateServerTable('table-Internet', 'Internet', internet);
             populateServerTable('table-Switch',   'Switch',   switches);
             populateServerTable('table-WiFi',     'WiFi',     wifi);
