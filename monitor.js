@@ -372,9 +372,14 @@ class NetworkMonitor {
             if (svc.delay_ms           != null) parts.push(`Delay: ${svc.delay_ms}ms`);
             if (svc.jitter_ms          != null) parts.push(`Jitter: ${svc.jitter_ms}ms`);
             if (svc.reason)                     parts.push(svc.reason);
+            // SMART (bare metal only): status OK|WARN|FAIL with reasons; WARN shows yellow, FAIL red
+            if (svc.status)                     parts.push(`Status: ${svc.status}`);
+            if (Array.isArray(svc.reasons) && svc.reasons.length) parts.push(svc.reasons.join('; '));
+            if (svc.age_s              != null) parts.push(`Age: ${svc.age_s}s`);
             ci.rtt = parts.join('  ');
 
-            const isDown = !svc.available || svc.db_available === false;
+            const isWarn = svc.status === 'WARN';
+            const isDown = !isWarn && (!svc.available || svc.db_available === false);
 
             if (isDown) {
                 if (counter.count === this.settings.thresholds.downThreshold) {
@@ -385,7 +390,7 @@ class NetworkMonitor {
                 ci.downtime = counter.downtime;
                 ci.count    = counter.count;
             } else {
-                ci.status = '10';
+                ci.status = isWarn ? '20' : '10'; // Yellow on WARN, else Green
                 ci.count  = 0;
                 counter.count = 0;
             }
