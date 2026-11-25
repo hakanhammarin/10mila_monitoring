@@ -4,6 +4,7 @@ const axios = require('axios');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
+const FortigateWan = require('./fortigate-wan');
 
 class NetworkMonitor {
     constructor(settings) {
@@ -11,6 +12,7 @@ class NetworkMonitor {
         this.cisData = [];
         this.cisDataCounter = new Map(); // Map of GUID -> counter data
         this.isRunning = false;
+        this.fortigates = new Map(); // CI GUID -> FortigateWan client (keeps the byte counters between polls)
 
         // Create axios instance with SSL verification disabled for FUEL API
         this.httpsAgent = new https.Agent({
@@ -401,6 +403,52 @@ class NetworkMonitor {
         }
     }
 
+    // A FortiGate WAN interface over the FortiOS REST API. The CI names its firewall ("fortigate": "arena"), and
+    // settings.json holds that firewall's url and API key (settings.fortigates.arena), so the key never reaches
+    // cis.json or result.json. Red when the link is down; yellow when an SD-WAN health check on it is down.
+    async checkFortigateWan(ci) {
+        const now = this.getTimestamp();
+        const counter = this.cisDataCounter.get(ci.index);
+        ci.time = now;
+
+        try {
+            let fg = this.fortigates.get(ci.index);
+            if (!fg) {
+                const cfg = (this.settings.fortigates || {})[ci.fortigate];
+                if (!cfg) throw new Error(`no settings.fortigates.${ci.fortigate}`);
+                fg = new FortigateWan({ ...cfg, interface: ci.interface || cfg.interface }, this.settings.timers.pingTimeout);
+                this.fortigates.set(ci.index, fg);
+            }
+            const w = await fg.read();
+
+            const parts = [`${w.interface}: ${w.link ? 'up' : 'DOWN'}`];
+            if (w.speed != null) parts.push(`${w.speed} Mbit/s${w.duplex === 1 ? ' full' : w.duplex === 0 ? ' half' : ''}`);
+            if (w.rx_mbps != null) parts.push(`In: ${w.rx_mbps} Mbit/s  Out: ${w.tx_mbps} Mbit/s`);
+            if (w.rx_errors || w.tx_errors) parts.push(`Errors: ${w.rx_errors || 0}/${w.tx_errors || 0}`);
+            for (const h of w.health) parts.push(`${h.name}: ${h.status}${h.latency != null ? ` ${h.latency}ms` : ''}${h.packet_loss != null ? ` loss ${h.packet_loss}%` : ''}`);
+            ci.rtt = parts.join('  ');
+
+            if (!w.link) {
+                if (counter.count === this.settings.thresholds.downThreshold) {
+                    counter.downtime = now;
+                }
+                ci.status = '40';
+                counter.count++;
+                ci.downtime = counter.downtime;
+                ci.count    = counter.count;
+            } else {
+                ci.status = w.health.some(h => h.status && h.status !== 'up') ? '20' : '10';
+                ci.count  = 0;
+                counter.count = 0;
+            }
+        } catch (error) {
+            const why = error.response ? `HTTP ${error.response.status}` : error.message;
+            console.error(`Error checking FortiGate WAN for ${ci.name}:`, why);
+            ci.status = '40';
+            ci.rtt    = why === 'HTTP 401' || why === 'HTTP 403' ? `${why} (API key or trusted host)` : 'Error: ' + why;
+        }
+    }
+
     async checkPowerLoss(ci) {
         const now = this.getTimestamp();
         const counter = this.cisDataCounter.get(ci.index);
@@ -586,6 +634,8 @@ class NetworkMonitor {
                 await this.checkDiskSpace(ci);
             } else if (ci.type === 'powerloss') {
                 await this.checkPowerLoss(ci);
+            } else if (ci.type === 'fortigate_wan') {
+                await this.checkFortigateWan(ci);
             }
 
             // Log if status is warning or critical

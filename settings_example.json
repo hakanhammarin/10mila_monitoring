@@ -41,5 +41,9 @@
             "vdom": "root",
             "accessToken": "**************"
         }
-    }
+    },
+  "fortigates": {
+    "arena": { "url": "https://192.168.1.99", "apiKey": "*****", "interface": "wan1", "caFile": "" },
+    "guest": { "url": "https://192.168.2.1", "apiKey": "*****", "interface": "wan1", "caFile": "" }
+  }
 }
